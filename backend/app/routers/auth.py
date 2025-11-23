@@ -1,9 +1,10 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from datetime import timedelta
+from typing import List
 from app.models import UserCreate, UserLogin, Token, UserResponse
 from app.auth import verify_password, get_password_hash, create_access_token, get_current_user
 from app.config import settings
-from app.database import database
+from app import database as db_module
 from bson import ObjectId
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -13,7 +14,9 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 async def register(user_data: UserCreate):
     """Register a new user"""
     # Check if user already exists
-    existing_user = await database.users.find_one({"username": user_data.username})
+    if db_module.database is None:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+    existing_user = await db_module.database.users.find_one({"username": user_data.username})
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -32,7 +35,7 @@ async def register(user_data: UserCreate):
     }
     
     # Insert user
-    result = await database.users.insert_one(user_doc)
+    result = await db_module.database.users.insert_one(user_doc)
     user_doc["_id"] = result.inserted_id
     
     return UserResponse(
@@ -46,7 +49,7 @@ async def register(user_data: UserCreate):
 async def login(user_data: UserLogin):
     """Login and get access token"""
     # Find user
-    user = await database.users.find_one({"username": user_data.username})
+    user = await db_module.database.users.find_one({"username": user_data.username})
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -79,3 +82,15 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user)):
         created_at=current_user.get("created_at")
     )
 
+
+@router.get("/users", response_model=List[UserResponse])
+async def get_users(current_user: dict = Depends(get_current_user)):
+    """Get list of all users (excluding current user)"""
+    users = []
+    async for user in db_module.database.users.find({"_id": {"$ne": ObjectId(current_user["_id"])}}):
+        users.append(UserResponse(
+            id=str(user["_id"]),
+            username=user["username"],
+            created_at=user.get("created_at")
+        ))
+    return users

@@ -9,6 +9,8 @@ export interface Message {
   username: string;
   content: string;
   timestamp: string;
+  sender_id: string;
+  recipient_id: string;
 }
 
 export interface Token {

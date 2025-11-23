@@ -7,7 +7,7 @@ A simple, production-ready full-stack messaging application with encrypted messa
 - **User Authentication**: Sign up and login with username/password
 - **JWT-based Auth**: Secure token-based authentication
 - **Encrypted Messages**: Messages are encrypted at rest using AES-256-GCM
-- **Global Chat Room**: Simple one-to-many messaging
+- **One-to-One Messaging**: Private conversations between users
 - **Real-time Updates**: Polling-based message updates (every 3 seconds)
 
 ## Tech Stack
@@ -44,7 +44,6 @@ A simple, production-ready full-stack messaging application with encrypted messa
 │   │       ├── auth.py      # Auth endpoints
 │   │       └── messages.py  # Message endpoints
 │   ├── requirements.txt
-│   ├── Dockerfile
 │   └── .env.example
 ├── frontend/
 │   ├── src/
@@ -55,64 +54,51 @@ A simple, production-ready full-stack messaging application with encrypted messa
 │   │   ├── App.tsx
 │   │   └── main.tsx
 │   ├── package.json
-│   ├── Dockerfile
 │   └── nginx.conf
-├── docker-compose.yml
 └── README.md
 ```
 
 ## Prerequisites
 
-- Docker and Docker Compose (recommended)
-- OR Python 3.11+ and Node.js 18+ (for local development)
-- MongoDB (if running locally without Docker)
+- Python 3.11+ and Node.js 18+
+- MongoDB
 
-## Quick Start with Docker
+## Quick Start
 
-1. **Clone the repository** (or navigate to the project directory)
+### Step 1: Install Prerequisites
 
-2. **Generate an encryption key**:
-   ```bash
-   # Generate a 32-byte key (base64 encoded)
-   python -c "import secrets; import base64; print(base64.b64encode(secrets.token_bytes(32)).decode())"
-   ```
-   
-   Or use this Python script:
-   ```python
-   import secrets
-   import base64
-   print(base64.b64encode(secrets.token_bytes(32)).decode())
-   ```
+1. **Install Python 3.11+**: Download from [python.org](https://www.python.org/downloads/)
+2. **Install Node.js 18+**: Download from [nodejs.org](https://nodejs.org/)
+3. **Install MongoDB**: 
+   - **Option A (Local)**: Download from [mongodb.com](https://www.mongodb.com/try/download/community)
+   - **Option B (Cloud)**: Use [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) (free tier available)
 
-3. **Create a `.env` file** in the root directory:
-   ```env
-   JWT_SECRET=your-super-secret-jwt-key-change-this
-   APP_ENCRYPTION_KEY=<paste-the-generated-key-here>
-   ```
+### Step 2: Start MongoDB
 
-4. **Start all services**:
-   ```bash
-   docker-compose up --build
-   ```
+**If using local MongoDB:**
+- **Windows**: MongoDB should start automatically as a service, or run `mongod` from command prompt
+- **macOS/Linux**: Run `mongod` or start MongoDB service
 
-5. **Access the application**:
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8000
-   - API Docs: http://localhost:8000/docs
+**If using MongoDB Atlas:**
+- Create a free cluster and get your connection string
+- It will look like: `mongodb+srv://username:password@cluster.mongodb.net/`
 
-## Local Development (Without Docker)
-
-### Backend Setup
+### Step 3: Backend Setup
 
 1. **Navigate to backend directory**:
    ```bash
-   cd backend
+   cd PostQuantumMessagingApp/backend
    ```
 
 2. **Create a virtual environment**:
    ```bash
+   # Windows
    python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   venv\Scripts\activate
+   
+   # macOS/Linux
+   python3 -m venv venv
+   source venv/bin/activate
    ```
 
 3. **Install dependencies**:
@@ -120,34 +106,51 @@ A simple, production-ready full-stack messaging application with encrypted messa
    pip install -r requirements.txt
    ```
 
-4. **Set up environment variables**:
+4. **Generate encryption key**:
    ```bash
-   cp .env.example .env
+   # From the project root directory
+   cd ..
+   python generate_key.py
+   ```
+   Copy the generated key (you'll need it in the next step).
+
+5. **Create `.env` file** in the `backend` directory:
+   ```bash
+   cd backend
+   # Create .env file manually or use:
+   # Windows (PowerShell)
+   New-Item .env
+   # macOS/Linux
+   touch .env
+   ```
+
+6. **Edit `.env` file** with the following content:
+   ```env
+   MONGO_URL=mongodb://localhost:27017
+   MONGO_DB_NAME=messaging_app
+   JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+   APP_ENCRYPTION_KEY=<paste-the-generated-key-from-step-4>
    ```
    
-   Edit `.env` and set:
-   - `MONGO_URL` - MongoDB connection string (default: `mongodb://localhost:27017`)
-   - `JWT_SECRET` - A secret key for JWT signing
-   - `APP_ENCRYPTION_KEY` - A 32-byte key (base64 or hex encoded) for message encryption
-
-5. **Start MongoDB** (if not using Docker):
-   ```bash
-   # Using Docker:
-   docker run -d -p 27017:27017 --name mongodb mongo:7
-   
-   # Or install MongoDB locally
+   **If using MongoDB Atlas**, replace `MONGO_URL` with your Atlas connection string:
+   ```env
+   MONGO_URL=mongodb+srv://username:password@cluster.mongodb.net/
    ```
 
-6. **Run the backend**:
+7. **Run the backend**:
    ```bash
    uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
    ```
+   
+   You should see: `Application startup complete`
+   Backend will be running at: http://localhost:8000
+   API docs available at: http://localhost:8000/docs
 
-### Frontend Setup
+### Step 4: Frontend Setup
 
-1. **Navigate to frontend directory**:
+1. **Open a new terminal** and navigate to frontend directory:
    ```bash
-   cd frontend
+   cd PostQuantumMessagingApp/frontend
    ```
 
 2. **Install dependencies**:
@@ -155,7 +158,15 @@ A simple, production-ready full-stack messaging application with encrypted messa
    npm install
    ```
 
-3. **Create `.env` file** (optional):
+3. **Create `.env` file** (optional, defaults to http://localhost:8000):
+   ```bash
+   # Windows (PowerShell)
+   New-Item .env
+   # macOS/Linux
+   touch .env
+   ```
+   
+   Add to `.env`:
    ```env
    VITE_API_URL=http://localhost:8000
    ```
@@ -164,8 +175,17 @@ A simple, production-ready full-stack messaging application with encrypted messa
    ```bash
    npm run dev
    ```
+   
+   You should see: `Local: http://localhost:5173`
 
-5. **Access the app**: http://localhost:5173
+5. **Access the app**: Open http://localhost:5173 in your browser
+
+### Step 5: Create Users and Start Chatting
+
+1. **Register a new user**: Click "Register" and create an account
+2. **Open another browser/incognito window**: Register a second user
+3. **Login with both users**: Each in their own browser window
+4. **Start chatting**: Select a user from the sidebar to start a conversation!
 
 ## Environment Variables
 
@@ -212,14 +232,19 @@ A simple, production-ready full-stack messaging application with encrypted messa
 
 ### Messages
 
-- `POST /messages` - Send a message (requires authentication)
+- `POST /messages` - Send a message to a specific user (requires authentication)
   ```json
   {
-    "content": "Hello, world!"
+    "content": "Hello!",
+    "recipient_id": "user_id_here"
   }
   ```
 
-- `GET /messages?limit=50` - Get recent messages (requires authentication)
+- `GET /messages?other_user_id=<user_id>&limit=50` - Get messages from a conversation (requires authentication)
+
+### Users
+
+- `GET /auth/users` - Get list of all users (excluding current user, requires authentication)
 
 ## Security Features
 
@@ -261,6 +286,7 @@ A simple, production-ready full-stack messaging application with encrypted messa
 - JWT tokens expire after 30 minutes (configurable)
 - Encryption key must be 32 bytes (256 bits) for AES-256
 - MongoDB collections: `users` and `messages`
+- The app supports one-to-one private messaging between users
 
 ## Troubleshooting
 

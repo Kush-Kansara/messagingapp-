@@ -55,6 +55,7 @@ class UserResponse(BaseModel):
 # Message Models
 class MessageCreate(BaseModel):
     content: str
+    recipient_id: str  # ID of the user to send the message to
 
 
 class Message(BaseModel):
@@ -76,6 +77,8 @@ class MessageResponse(BaseModel):
     username: str
     content: str  # Decrypted content
     timestamp: datetime
+    sender_id: str
+    recipient_id: str
 
     class Config:
         json_encoders = {ObjectId: str}

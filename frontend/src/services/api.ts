@@ -34,16 +34,21 @@ export const authAPI = {
     const response = await api.get<User>('/auth/me');
     return response.data;
   },
+
+  getUsers: async (): Promise<User[]> => {
+    const response = await api.get<User[]>('/auth/users');
+    return response.data;
+  },
 };
 
 export const messagesAPI = {
-  sendMessage: async (content: string): Promise<Message> => {
-    const response = await api.post<Message>('/messages', { content });
+  sendMessage: async (content: string, recipientId: string): Promise<Message> => {
+    const response = await api.post<Message>('/messages', { content, recipient_id: recipientId });
     return response.data;
   },
 
-  getMessages: async (limit: number = 50): Promise<Message[]> => {
-    const response = await api.get<Message[]>(`/messages?limit=${limit}`);
+  getMessages: async (otherUserId: string, limit: number = 50): Promise<Message[]> => {
+    const response = await api.get<Message[]>(`/messages?other_user_id=${otherUserId}&limit=${limit}`);
     return response.data;
   },
 };

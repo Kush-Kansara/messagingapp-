@@ -1,19 +1,98 @@
 .chat-container {
   display: flex;
-  flex-direction: column;
   height: 100vh;
-  max-width: 1200px;
-  margin: 0 auto;
   background: white;
+}
+
+.chat-sidebar {
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  background-color: #f5f5f5;
+  border-right: 1px solid #ddd;
+}
+
+.sidebar-header {
+  padding: 20px;
+  background-color: #4a90e2;
+  color: white;
+  border-bottom: 1px solid #357abd;
+}
+
+.sidebar-header h2 {
+  margin: 0 0 15px 0;
+  font-size: 20px;
+}
+
+.user-info-sidebar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+}
+
+.users-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.user-item {
+  display: flex;
+  align-items: center;
+  padding: 15px 20px;
+  cursor: pointer;
+  border-bottom: 1px solid #e0e0e0;
+  transition: background-color 0.2s;
+}
+
+.user-item:hover {
+  background-color: #e8e8e8;
+}
+
+.user-item.active {
+  background-color: #d0e5ff;
+  border-left: 3px solid #4a90e2;
+}
+
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #4a90e2;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.user-name {
+  font-weight: 500;
+  color: #333;
+}
+
+.empty-users {
+  padding: 40px 20px;
+  text-align: center;
+  color: #999;
+  font-style: italic;
+}
+
+.chat-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 .chat-header {
   padding: 20px;
   background-color: #4a90e2;
   color: white;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
@@ -22,10 +101,13 @@
   font-size: 24px;
 }
 
-.user-info {
+.no-selection {
+  flex: 1;
   display: flex;
   align-items: center;
-  gap: 20px;
+  justify-content: center;
+  color: #999;
+  font-size: 18px;
 }
 
 .logout-button {
@@ -63,6 +145,25 @@
   background: white;
   border-radius: 8px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  max-width: 70%;
+}
+
+.message.own-message {
+  margin-left: auto;
+  background-color: #4a90e2;
+  color: white;
+}
+
+.message.own-message .message-username {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.message.own-message .message-timestamp {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.message.own-message .message-content {
+  color: white;
 }
 
 .message-header {
