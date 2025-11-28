@@ -128,16 +128,6 @@ class MessageCreate(BaseModel):
         """Check if this message is encrypted (has nonce and ciphertext)"""
         return self.nonce is not None and self.ciphertext is not None
     
-    @field_validator('*')
-    @classmethod
-    def validate_message_format(cls, v, info):
-        """Validate that either plaintext content OR encrypted payload is provided"""
-        if info.field_name == 'recipient_id':
-            return v  # Skip validation for recipient_id
-        
-        # Get all field values (this is called per field, so we need to check in the model)
-        return v
-    
     def model_post_init(self, __context):
         """Validate that either content or (nonce and ciphertext) are provided"""
         is_enc = self.is_encrypted()
@@ -195,6 +185,86 @@ class MessageRequestResponse(BaseModel):
 class MessageRequestAction(BaseModel):
     request_id: str
     action: str  # "accept" or "decline"
+
+
+# Document Models (kept for potential future use)
+class DocumentCreate(BaseModel):
+    """Model for uploading a new document"""
+    title: str = Field(..., min_length=1, max_length=200, description="Document title")
+    content: Optional[str] = None  # Plaintext HTML content (for backward compatibility)
+    # Encrypted payload (new format for post-quantum transport security)
+    nonce: Optional[str] = None  # Base64-encoded nonce for AES-GCM
+    ciphertext: Optional[str] = None  # Base64-encoded encrypted content
+    
+    def is_encrypted(self) -> bool:
+        """Check if this document is encrypted (has nonce and ciphertext)"""
+        return self.nonce is not None and self.ciphertext is not None
+    
+    def model_post_init(self, __context):
+        """Validate that either content or (nonce and ciphertext) are provided"""
+        is_enc = self.is_encrypted()
+        has_content = self.content is not None and self.content.strip() != ""
+        
+        if not is_enc and not has_content:
+            raise ValueError("Either 'content' (plaintext) or both 'nonce' and 'ciphertext' (encrypted) must be provided")
+        
+        if is_enc and has_content:
+            raise ValueError("Cannot provide both plaintext 'content' and encrypted 'nonce'/'ciphertext'")
+
+
+class DocumentUpdate(BaseModel):
+    """Model for updating an existing document"""
+    title: Optional[str] = Field(None, min_length=1, max_length=200)
+    content: Optional[str] = None
+    nonce: Optional[str] = None
+    ciphertext: Optional[str] = None
+    
+    def is_encrypted(self) -> bool:
+        return self.nonce is not None and self.ciphertext is not None
+
+
+class Document(BaseModel):
+    """Internal document model"""
+    id: Optional[PyObjectId] = None
+    user_id: PyObjectId
+    username: str
+    title: str
+    content: str  # HTML content (decrypted from transport encryption)
+    content_type: str = "text/html"  # MIME type
+    timestamp: datetime = datetime.utcnow()
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        json_encoders = {ObjectId: str}
+        populate_by_name = True
+
+
+class DocumentResponse(BaseModel):
+    """Response model for document retrieval"""
+    id: str
+    username: str
+    title: str
+    content: str  # HTML content
+    content_type: str
+    timestamp: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        json_encoders = {ObjectId: str}
+        populate_by_name = True
+
+
+class DocumentListItem(BaseModel):
+    """Simplified document model for listing"""
+    id: str
+    title: str
+    username: str
+    timestamp: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        json_encoders = {ObjectId: str}
+        populate_by_name = True
 
 
 # Token Models

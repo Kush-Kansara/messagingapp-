@@ -40,3 +40,21 @@ export interface RegisterData {
   phone_number: string;
 }
 
+export interface Document {
+  id: string;
+  username: string;
+  title: string;
+  content: string;
+  content_type: string;
+  timestamp: string;
+  updated_at?: string;
+}
+
+export interface DocumentListItem {
+  id: string;
+  title: string;
+  username: string;
+  timestamp: string;
+  updated_at?: string;
+}
+

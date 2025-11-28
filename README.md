@@ -1,4 +1,4 @@
-# Post-Quantum Messaging App
+# Post-Quantum Secure Messaging App
 
 A full-stack messaging application with post-quantum transport security, featuring real-time messaging, user authentication, and message request system.
 
@@ -6,7 +6,10 @@ A full-stack messaging application with post-quantum transport security, featuri
 
 - **User Authentication**: Sign up and login with username/password
 - **JWT-based Auth**: Secure token-based authentication stored in httpOnly cookies
-- **Post-Quantum Transport Security**: CRYSTALS-Kyber KEM with AES-256-GCM encryption (see [POST_QUANTUM.md](POST_QUANTUM.md))
+- **Post-Quantum Transport Security**: 
+  - Application layer: CRYSTALS-Kyber KEM with AES-256-GCM encryption
+  - Transport layer: OQS-OpenSSL 3 provider support (optional, see [OQS_OPENSSL_SETUP.md](OQS_OPENSSL_SETUP.md))
+  - See [POST_QUANTUM.md](POST_QUANTUM.md) for details
 - **One-to-One Messaging**: Private conversations between users
 - **Real-time Updates**: WebSocket-based instant message delivery
 - **Message Requests**: First messages require acceptance before conversation starts
@@ -19,7 +22,8 @@ A full-stack messaging application with post-quantum transport security, featuri
 - **MongoDB** - NoSQL database with Motor async driver
 - **JWT** - Token-based authentication (HS256)
 - **Bcrypt** - Password hashing
-- **liboqs-python** - Post-quantum cryptography (CRYSTALS-Kyber)
+- **liboqs-python** - Post-quantum cryptography (CRYSTALS-Kyber) for application-layer security
+- **OQS-OpenSSL 3 Provider** - Post-quantum TLS/HTTPS support (optional, see [OQS_OPENSSL_SETUP.md](OQS_OPENSSL_SETUP.md))
 - **WebSockets** - Real-time message delivery
 
 ### Frontend
@@ -120,6 +124,13 @@ docker run -d -p 27017:27017 --name mongodb mongo:7
    ⚠️ **Important**: `JWT_SECRET` must be at least 32 characters long!
 
 6. **Start the backend server**:
+   
+   **Option A: Using startup script (recommended)**
+   ```powershell
+   .\start_server.ps1
+   ```
+   
+   **Option B: Manual start**
    ```powershell
    uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
    ```
@@ -128,11 +139,14 @@ docker run -d -p 27017:27017 --name mongodb mongo:7
    ```
    INFO:     Uvicorn running on http://0.0.0.0:8000
    Connected to MongoDB: messaging_app
+   [STARTUP] Post-quantum server keypair generated successfully
    Application startup complete.
    ```
    
    ✅ Backend is now running at: **http://localhost:8000**  
    📚 API docs available at: **http://localhost:8000/docs**
+   
+   **Note**: If you see warnings about liboqs, the app will still work with fallback mode. For full post-quantum security, see [POST_QUANTUM.md](POST_QUANTUM.md).
 
 ### Step 4: Frontend Setup
 
@@ -219,7 +233,11 @@ docker run -d -p 27017:27017 --name mongodb mongo:7
 │   ├── package.json
 │   └── nginx.conf
 ├── README.md                    # This file
-└── POST_QUANTUM.md             # Post-quantum implementation details
+├── POST_QUANTUM.md             # Post-quantum implementation details
+├── OQS_OPENSSL_SETUP.md        # OQS-OpenSSL 3 provider setup guide
+├── OQS_INTEGRATION_SUMMARY.md  # OQS-OpenSSL integration overview
+├── SETUP_CHECKLIST.md          # Step-by-step setup checklist
+└── TROUBLESHOOTING_BLANK_PAGE.md # Troubleshooting guide
 ```
 
 ## Environment Variables
@@ -295,10 +313,14 @@ docker run -d -p 27017:27017 --name mongodb mongo:7
 
 - `GET /messages/conversations` - Get list of users you've chatted with
 
-### Post-Quantum (see [POST_QUANTUM.md](POST_QUANTUM.md))
+### Post-Quantum (see [POST_QUANTUM.md](POST_QUANTUM.md) and [OQS_OPENSSL_SETUP.md](OQS_OPENSSL_SETUP.md))
 
 - `GET /pq/kem-public-key` - Get server's Kyber public key
 - `POST /pq/handshake` - Perform post-quantum handshake
+
+**Note**: The application uses post-quantum security at two levels:
+- **Application Layer**: CRYSTALS-Kyber KEM with AES-256-GCM (always active)
+- **Transport Layer**: OQS-OpenSSL 3 provider for TLS/HTTPS (optional, requires setup)
 
 ### WebSocket
 
@@ -334,9 +356,13 @@ All communication goes through the server. Users never communicate directly.
 
 1. **Password Hashing**: Passwords hashed using bcrypt before storage
 2. **JWT Authentication**: Secure token-based authentication with httpOnly cookies
-3. **Post-Quantum Transport Security**: CRYSTALS-Kyber KEM with AES-256-GCM encryption (see [POST_QUANTUM.md](POST_QUANTUM.md))
-4. **CORS Protection**: Configured CORS middleware for frontend
-5. **Rate Limiting**: Applied to login/register endpoints
+3. **Post-Quantum Transport Security**: 
+   - **Application Layer**: CRYSTALS-Kyber KEM with AES-256-GCM encryption (always active)
+   - **Transport Layer**: OQS-OpenSSL 3 provider for post-quantum TLS/HTTPS (optional)
+   - See [POST_QUANTUM.md](POST_QUANTUM.md) and [OQS_OPENSSL_SETUP.md](OQS_OPENSSL_SETUP.md) for details
+4. **Protected Channel**: All client-server communication uses post-quantum secure channels
+5. **CORS Protection**: Configured CORS middleware for frontend
+6. **Rate Limiting**: Applied to login/register endpoints
 
 ## Troubleshooting
 
@@ -354,6 +380,7 @@ All communication goes through the server. Users never communicate directly.
 **"liboqs not found" warnings:**
 - The app will work with fallback mode (see [POST_QUANTUM.md](POST_QUANTUM.md))
 - For full post-quantum security, install liboqs (optional)
+- The startup script (`start_server.ps1`) handles this gracefully and won't fail if liboqs is missing
 
 **Port 8000 already in use:**
 - Change the port: `uvicorn app.main:app --reload --port 8001`
@@ -374,6 +401,11 @@ All communication goes through the server. Users never communicate directly.
 - Register at least two users
 - Users should appear in "All Users" section automatically
 
+**Blank page after refresh:**
+- Check browser console (F12) for JavaScript errors
+- Verify both frontend and backend are running
+- See [TROUBLESHOOTING_BLANK_PAGE.md](TROUBLESHOOTING_BLANK_PAGE.md) for detailed help
+
 ### MongoDB Issues
 
 **Check if MongoDB is running:**
@@ -392,6 +424,25 @@ mongosh
 # Type 'exit' to quit
 ```
 
+## Post-Quantum Security
+
+This application implements post-quantum security at multiple levels:
+
+### Application Layer (Always Active)
+- **CRYSTALS-Kyber KEM**: Key exchange for session key establishment
+- **AES-256-GCM**: Message encryption during transport
+- **Automatic**: Works immediately after login (post-quantum handshake)
+
+### Transport Layer (Optional)
+- **OQS-OpenSSL 3 Provider**: Post-quantum TLS/HTTPS support
+- **Requires Setup**: See [OQS_OPENSSL_SETUP.md](OQS_OPENSSL_SETUP.md) for installation
+- **Benefits**: Post-quantum certificate signatures and TLS cipher suites
+
+For detailed information, see:
+- [POST_QUANTUM.md](POST_QUANTUM.md) - Application-layer post-quantum security
+- [OQS_OPENSSL_SETUP.md](OQS_OPENSSL_SETUP.md) - Transport-layer OQS-OpenSSL setup
+- [OQS_INTEGRATION_SUMMARY.md](OQS_INTEGRATION_SUMMARY.md) - Complete integration overview
+
 ## Development Notes
 
 - **Real-time Updates**: WebSocket-based (not polling)
@@ -399,6 +450,7 @@ mongosh
 - **Password Requirements**: Minimum 8 characters with uppercase, lowercase, digit, and special character
 - **Message Types**: Text only (no file attachments)
 - **Chat Type**: One-to-one only (no group chats)
+- **Post-Quantum**: Uses NIST-selected algorithms (CRYSTALS-Kyber)
 
 ## Deployment
 

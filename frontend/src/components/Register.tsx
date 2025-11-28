@@ -50,19 +50,36 @@ const Register: React.FC = () => {
       login(user);
       navigate('/chat');
     } catch (err: any) {
+      console.error('Registration error:', err);
+      console.error('Error response:', err.response);
+      
       // Handle validation errors from FastAPI/Pydantic
       const errorDetail = err.response?.data?.detail;
       let errorMessage = 'Registration failed. Please try again.';
       
-      if (errorDetail) {
+      // Check for network errors
+      if (!err.response) {
+        errorMessage = 'Cannot connect to server. Make sure the backend is running on http://localhost:8000';
+        console.error('Network error - backend may not be running');
+      } else if (errorDetail) {
         if (Array.isArray(errorDetail)) {
           // Pydantic validation errors are arrays
-          errorMessage = errorDetail.map((e: any) => e.msg || e.message || JSON.stringify(e)).join(', ');
+          errorMessage = errorDetail.map((e: any) => {
+            const field = e.loc ? e.loc.join('.') : 'field';
+            const msg = e.msg || e.message || JSON.stringify(e);
+            return `${field}: ${msg}`;
+          }).join(', ');
         } else if (typeof errorDetail === 'string') {
           errorMessage = errorDetail;
         } else {
-          errorMessage = 'Validation error. Please check your input.';
+          errorMessage = JSON.stringify(errorDetail);
         }
+      } else if (err.response?.status === 400) {
+        errorMessage = 'Invalid input. Please check all fields.';
+      } else if (err.response?.status === 500) {
+        errorMessage = 'Server error. Please check backend logs.';
+      } else if (err.response?.status) {
+        errorMessage = `Error ${err.response.status}: ${err.response.statusText || 'Unknown error'}`;
       }
       
       setError(errorMessage);

@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field, field_validator
+from typing import Optional
 import sys
 
 
@@ -19,6 +20,12 @@ class Settings(BaseSettings):
     # Server
     host: str = Field(default="0.0.0.0", env="HOST")
     port: int = Field(default=8000, env="PORT")
+    
+    # HTTPS/TLS Configuration (for OQS-OpenSSL)
+    use_https: bool = Field(default=False, env="USE_HTTPS")
+    ssl_certfile: Optional[str] = Field(default=None, env="SSL_CERTFILE")
+    ssl_keyfile: Optional[str] = Field(default=None, env="SSL_KEYFILE")
+    oqs_provider_path: Optional[str] = Field(default=None, env="OQS_PROVIDER_PATH")
     
     model_config = SettingsConfigDict(
         env_file=".env",

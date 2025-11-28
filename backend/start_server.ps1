@@ -1,45 +1,59 @@
 # Startup script for FastAPI server with PQ support
-# This sets the OQS_INSTALL_PATH before starting uvicorn
+# This sets the OQS_INSTALL_PATH before starting uvicorn (optional)
 
 Write-Host "Setting up post-quantum environment..." -ForegroundColor Cyan
 
-# Set OQS_INSTALL_PATH to point to your liboqs build
-$env:OQS_INSTALL_PATH = "C:\Users\xxcbj\Desktop\liboqs-0.15.0\liboqs-0.15.0\build"
+# Check if LIBOQS_DIR is set in environment
+$liboqsDir = $env:LIBOQS_DIR
 
-# Verify DLL exists
-$dllPath = "$env:OQS_INSTALL_PATH\bin\oqs.dll"
-if (Test-Path $dllPath) {
-    Write-Host "[OK] Found liboqs DLL at: $dllPath" -ForegroundColor Green
-} else {
-    Write-Host "[WARNING] DLL not found at: $dllPath" -ForegroundColor Yellow
-    Write-Host "Copying from Release directory..." -ForegroundColor Yellow
-    $releaseDll = "$env:OQS_INSTALL_PATH\bin\Release\oqs.dll"
-    if (Test-Path $releaseDll) {
-        Copy-Item $releaseDll -Destination $dllPath -Force
-        Write-Host "[OK] DLL copied" -ForegroundColor Green
-    } else {
-        Write-Host "[ERROR] DLL not found in Release directory either!" -ForegroundColor Red
-        exit 1
+if ($liboqsDir -and (Test-Path $liboqsDir)) {
+    Write-Host "[OK] Using liboqs from: $liboqsDir" -ForegroundColor Green
+    $env:OQS_INSTALL_PATH = $liboqsDir
+    
+    # Try to find DLL
+    $dllPaths = @(
+        "$liboqsDir\bin\oqs.dll",
+        "$liboqsDir\bin\Release\oqs.dll",
+        "$liboqsDir\lib\oqs.dll"
+    )
+    
+    $dllFound = $false
+    foreach ($dllPath in $dllPaths) {
+        if (Test-Path $dllPath) {
+            Write-Host "[OK] Found liboqs DLL at: $dllPath" -ForegroundColor Green
+            $dllFound = $true
+            break
+        }
     }
+    
+    if (-not $dllFound) {
+        Write-Host "[WARNING] liboqs DLL not found, but continuing anyway" -ForegroundColor Yellow
+        Write-Host "[INFO] App will use fallback mode (still secure, but not full PQ)" -ForegroundColor Cyan
+    }
+} else {
+    Write-Host "[INFO] LIBOQS_DIR not set - liboqs is optional" -ForegroundColor Cyan
+    Write-Host "[INFO] App will use fallback mode (still secure, but not full PQ)" -ForegroundColor Cyan
+    Write-Host "[INFO] To enable full PQ: Set LIBOQS_DIR environment variable" -ForegroundColor Yellow
 }
 
 # Activate virtual environment
 Write-Host "Activating virtual environment..." -ForegroundColor Cyan
 & ".\venv\Scripts\Activate.ps1"
 
-# Test liboqs import
+# Test liboqs import (optional - app works without it)
 Write-Host "Testing liboqs import..." -ForegroundColor Cyan
 try {
     python -c "import oqs; print('[OK] liboqs loaded successfully')" 2>&1 | Out-Null
     if ($LASTEXITCODE -eq 0) {
-        Write-Host "[OK] liboqs is ready!" -ForegroundColor Green
+        Write-Host "[OK] liboqs is ready! Full post-quantum security enabled." -ForegroundColor Green
     } else {
-        Write-Host "[ERROR] liboqs import failed" -ForegroundColor Red
-        exit 1
+        Write-Host "[WARNING] liboqs import failed - using fallback mode" -ForegroundColor Yellow
+        Write-Host "[INFO] App will still work, but with fallback cryptography" -ForegroundColor Cyan
     }
 } catch {
-    Write-Host "[ERROR] Failed to import liboqs: $_" -ForegroundColor Red
-    exit 1
+    Write-Host "[WARNING] liboqs not available - using fallback mode" -ForegroundColor Yellow
+    Write-Host "[INFO] App will still work, but with fallback cryptography" -ForegroundColor Cyan
+    Write-Host "[INFO] To enable full PQ: Install liboqs-python and set LIBOQS_DIR" -ForegroundColor Yellow
 }
 
 Write-Host ""
@@ -49,5 +63,6 @@ Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
 
 # Start uvicorn
+# For HTTPS with OQS-OpenSSL, use: .\start_server_https.ps1
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 

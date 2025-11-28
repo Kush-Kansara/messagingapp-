@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Token, User, Message, MessageRequest, LoginCredentials, RegisterData } from '../types';
+import type { Token, User, Message, MessageRequest, LoginCredentials, RegisterData, Document, DocumentListItem } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -113,6 +113,73 @@ export const createWebSocket = (userId: string, token: string): WebSocket => {
   const wsHost = import.meta.env.VITE_API_URL?.replace(/^https?:\/\//, '') || 'localhost:8000';
   const wsUrl = `${wsProtocol}//${wsHost}/ws/${userId}?token=${token}`;
   return new WebSocket(wsUrl);
+};
+
+export const documentsAPI = {
+  /**
+   * Upload a new document (plaintext)
+   */
+  uploadDocument: async (title: string, content: string): Promise<Document> => {
+    const response = await api.post<Document>('/documents', {
+      title,
+      content
+    });
+    return response.data;
+  },
+
+  /**
+   * Upload a document with encryption (post-quantum transport security)
+   */
+  uploadDocumentEncrypted: async (
+    title: string,
+    nonce: string,
+    ciphertext: string
+  ): Promise<Document> => {
+    const response = await api.post<Document>('/documents', {
+      title,
+      nonce,
+      ciphertext
+    });
+    return response.data;
+  },
+
+  /**
+   * List all documents (metadata only)
+   */
+  listDocuments: async (limit: number = 50, skip: number = 0): Promise<DocumentListItem[]> => {
+    const response = await api.get<DocumentListItem[]>(`/documents?limit=${limit}&skip=${skip}`);
+    return response.data;
+  },
+
+  /**
+   * Get a specific document by ID
+   */
+  getDocument: async (documentId: string): Promise<Document> => {
+    const response = await api.get<Document>(`/documents/${documentId}`);
+    return response.data;
+  },
+
+  /**
+   * Update a document
+   */
+  updateDocument: async (
+    documentId: string,
+    title?: string,
+    content?: string
+  ): Promise<Document> => {
+    const response = await api.put<Document>(`/documents/${documentId}`, {
+      title,
+      content
+    });
+    return response.data;
+  },
+
+  /**
+   * Delete a document
+   */
+  deleteDocument: async (documentId: string): Promise<void> => {
+    await api.delete(`/documents/${documentId}`);
+  },
 };
 
 export default api;

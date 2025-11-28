@@ -9,8 +9,8 @@ from app.middleware import setup_rate_limiting
 from app.pq_transport import generate_server_keypair
 
 app = FastAPI(
-    title="Messaging App API",
-    description="A simple messaging app with encrypted messages",
+    title="Post-Quantum Secure Messaging App API",
+    description="A post-quantum secure messaging application with protected client-server communication using OQS-OpenSSL 3",
     version="1.0.0"
 )
 
@@ -56,7 +56,7 @@ app.add_middleware(
 
 # Routers
 app.include_router(auth.router)
-app.include_router(messages.router)
+app.include_router(messages.router)  # Messaging endpoints
 app.include_router(websocket.router)
 app.include_router(pq.router)  # Post-quantum transport security
 
@@ -81,7 +81,10 @@ async def shutdown_event():
 
 @app.get("/")
 async def root():
-    return {"message": "Messaging App API", "status": "running"}
+    return {
+        "message": "Post-Quantum Secure Messaging App API",
+        "status": "running"
+    }
 
 @app.get("/health")
 async def health():
