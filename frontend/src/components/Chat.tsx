@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { messagesAPI, authAPI } from '../services/api';
+import { messagesAPI, authAPI, createWebSocket } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useSessionKey } from '../context/SessionKeyContext';
+import { encryptMessage } from '../utils/crypto';
 import type { Message, MessageRequest, User } from '../types';
 import './Chat.css';
 
 const Chat: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [allUsers, setAllUsers] = useState<User[]>([]);  // All users in the system
+  const [conversationPartners, setConversationPartners] = useState<User[]>([]);  // Users you've chatted with
   const [messageRequests, setMessageRequests] = useState<MessageRequest[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState('');
@@ -15,46 +17,47 @@ const Chat: React.FC = () => {
   const [error, setError] = useState('');
   const [loadingUsers, setLoadingUsers] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const selectedUserIdRef = useRef<string | null>(null);
   const { user, logout, isAuthenticated } = useAuth();
+  const { sessionKey, hasSessionKey } = useSessionKey();
   const navigate = useNavigate();
+  
+  // Keep ref in sync with state
+  useEffect(() => {
+    selectedUserIdRef.current = selectedUserId;
+  }, [selectedUserId]);
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || !user) {
       navigate('/login');
       return;
     }
     
-    // Fetch all users and requests on initial load
-    fetchAllUsers();
+    // Fetch conversation partners and requests on initial load
+    fetchConversationPartners();
     fetchMessageRequests();
     
-    // Poll for new message requests every 30 seconds (very infrequent)
-    // This allows users to see new requests without constant checking
-    const interval = setInterval(() => {
-      fetchMessageRequests();
-    }, 30000); // 30 seconds - very infrequent
+    // Setup WebSocket connection for real-time updates
+    setupWebSocket();
     
-    return () => clearInterval(interval);
-  }, [isAuthenticated, navigate]);
+    return () => {
+      // Cleanup WebSocket on unmount
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+    };
+  }, [isAuthenticated, user, navigate]);
 
   useEffect(() => {
     if (selectedUserId) {
       // Fetch messages when a user is selected
       fetchMessages();
-      
-      // Poll for new messages every 15 seconds ONLY when conversation is open
-      // This allows recipients to see new messages without constant requests
-      const interval = setInterval(() => {
-        if (!loading) {
-          fetchMessages();
-        }
-      }, 15000); // 15 seconds - much less frequent than before
-      
-      return () => clearInterval(interval);
     } else {
       setMessages([]);
     }
-  }, [selectedUserId, loading]);
+  }, [selectedUserId]);
 
   useEffect(() => {
     scrollToBottom();
@@ -64,18 +67,152 @@ const Chat: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const fetchAllUsers = async () => {
+  const setupWebSocket = async () => {
+    if (!user?.id) return;
+    
+    // Close existing connection if any
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
+    
+    // Get WebSocket token from API
+    let token: string;
+    try {
+      const tokenData = await authAPI.getWebSocketToken();
+      token = tokenData.token;
+    } catch (err) {
+      console.error('Failed to get WebSocket token:', err);
+      return;
+    }
+    
+    try {
+      const ws = createWebSocket(user.id, token);
+      
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+      };
+      
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('WebSocket message received:', data);
+          
+          if (data.type === 'new_message') {
+            const message: Message = data.message;
+            console.log('New message via WebSocket:', message);
+            
+            // Get current selectedUserId from ref (always up-to-date)
+            const currentSelectedUserId = selectedUserIdRef.current;
+            console.log('Current selectedUserId (from ref):', currentSelectedUserId);
+            console.log('Message sender_id:', message.sender_id);
+            console.log('Message recipient_id:', message.recipient_id);
+            console.log('Current user id:', user?.id);
+            
+            // Check if message is for current user (they are recipient)
+            const isForCurrentUser = message.recipient_id === user?.id;
+            
+            // Determine which user this message is from/to
+            const otherUserId = message.sender_id === user?.id ? message.recipient_id : message.sender_id;
+            
+            // Check if this message is for the currently selected conversation
+            const isCurrentConversation = currentSelectedUserId === otherUserId;
+            
+            console.log('isForCurrentUser:', isForCurrentUser);
+            console.log('isCurrentConversation:', isCurrentConversation);
+            console.log('otherUserId:', otherUserId);
+            
+            // If this conversation is currently open, add the message immediately
+            if (isCurrentConversation && currentSelectedUserId) {
+              console.log('Message matches current conversation, adding to UI immediately');
+              setMessages((prev) => {
+                // Avoid duplicates
+                if (prev.some(m => m.id === message.id)) {
+                  console.log('Message already in list, skipping');
+                  return prev;
+                }
+                console.log('Adding message to current conversation');
+                const updated = [...prev, message].sort((a, b) => 
+                  new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+                );
+                console.log('Updated messages count:', updated.length);
+                return updated;
+              });
+            }
+            
+            // Always refresh conversation partners (in case it's a new conversation)
+            // This ensures the sidebar updates even if conversation isn't open
+            if (isForCurrentUser) {
+              fetchConversationPartners();
+            }
+          } else if (data.type === 'new_request') {
+            const request: MessageRequest = data.request;
+            console.log('New request via WebSocket:', request);
+            setMessageRequests((prev) => {
+              // Avoid duplicates
+              if (prev.some(r => r.id === request.id)) {
+                console.log('Request already in list, skipping');
+                return prev;
+              }
+              console.log('Adding new request to list');
+              return [request, ...prev];
+            });
+          } else if (data.type === 'connected') {
+            console.log('WebSocket connection confirmed');
+          } else if (data.type === 'pong') {
+            // Keepalive response
+          }
+        } catch (err) {
+          console.error('Error parsing WebSocket message:', err, event.data);
+        }
+      };
+      
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+      
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        // Attempt to reconnect after 3 seconds
+        setTimeout(() => {
+          if (isAuthenticated && user?.id) {
+            setupWebSocket();
+          }
+        }, 3000);
+      };
+      
+      // Send ping every 30 seconds to keep connection alive
+      const pingInterval = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'ping' }));
+        }
+      }, 30000);
+      
+      wsRef.current = ws;
+      
+      // Cleanup ping interval on close
+      const originalClose = ws.close;
+      ws.close = function() {
+        clearInterval(pingInterval);
+        originalClose.call(this);
+      };
+      
+    } catch (err) {
+      console.error('Failed to setup WebSocket:', err);
+    }
+  };
+  
+  const fetchConversationPartners = async () => {
     setLoadingUsers(true);
     try {
-      const users = await authAPI.getAllUsers();
-      setAllUsers(users);
+      const users = await authAPI.getConversationPartners();
+      setConversationPartners(users);
     } catch (err: any) {
-      console.error('Failed to fetch users:', err);
+      console.error('Failed to fetch conversation partners:', err);
       if (err.response?.status === 401) {
         logout();
         navigate('/login');
       } else {
-        setError('Failed to load users. Please refresh the page.');
+        setError('Failed to load conversations. Please refresh the page.');
       }
     } finally {
       setLoadingUsers(false);
@@ -130,7 +267,26 @@ const Chat: React.FC = () => {
     setNewMessage(''); // Clear input immediately for better UX
 
     try {
-      const sentMessage = await messagesAPI.sendMessage(messageContent, selectedUserId);
+      // Encrypt message if we have a session key (PQ transport security)
+      let sentMessage: Message;
+      
+      if (hasSessionKey && sessionKey) {
+        // Encrypt the message using AES-GCM with the session key
+        console.log('[PQ] Encrypting message before sending...');
+        const { nonce, ciphertext } = await encryptMessage(sessionKey, messageContent);
+        
+        // Send encrypted message
+        sentMessage = await messagesAPI.sendMessageEncrypted(
+          selectedUserId,
+          nonce,
+          ciphertext
+        );
+        console.log('[PQ] Encrypted message sent successfully');
+      } else {
+        // Fallback to plaintext if no session key (backward compatibility)
+        console.warn('[PQ] No session key available, sending plaintext message');
+        sentMessage = await messagesAPI.sendMessage(messageContent, selectedUserId);
+      }
       
       // Check if this is a new conversation BEFORE adding the optimistic message
       const isNewConversation = messages.length === 0;
@@ -219,8 +375,10 @@ const Chat: React.FC = () => {
 
   const getSelectedUserName = () => {
     if (!selectedUserId) return null;
-    const selectedUser = allUsers.find(u => u.id === selectedUserId);
-    return selectedUser?.username || 'Unknown';
+    const selectedUser = conversationPartners.find(u => u.id === selectedUserId);
+    // Also check message requests
+    const requestUser = messageRequests.find(r => r.sender_id === selectedUserId);
+    return selectedUser?.username || requestUser?.sender_username || 'Unknown';
   };
 
   const fetchMessageRequests = async () => {
@@ -247,8 +405,8 @@ const Chat: React.FC = () => {
         // Remove from requests
         const request = messageRequests.find(r => r.id === requestId);
         if (request) {
-          // Refresh users list to ensure the accepted user is visible
-          await fetchAllUsers();
+          // Refresh conversation partners to include the accepted user
+          await fetchConversationPartners();
           // Auto-select the accepted user
           setSelectedUserId(request.sender_id);
           // Immediately fetch messages to show the accepted message
@@ -401,11 +559,11 @@ const Chat: React.FC = () => {
         )}
         <div className="users-list">
           {loadingUsers ? (
-            <div className="empty-users">Loading users...</div>
-          ) : allUsers.length === 0 ? (
-            <div className="empty-users">No other users found</div>
+            <div className="empty-users">Loading conversations...</div>
+          ) : conversationPartners.length === 0 ? (
+            <div className="empty-users">No conversations yet. Accept a message request to start chatting!</div>
           ) : (
-            allUsers.map((otherUser) => (
+            conversationPartners.map((otherUser) => (
               <div
                 key={otherUser.id}
                 className={`user-item ${selectedUserId === otherUser.id ? 'active' : ''}`}

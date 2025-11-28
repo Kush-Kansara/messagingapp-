@@ -31,15 +31,59 @@ export const authAPI = {
     return response.data;
   },
 
-  getAllUsers: async (): Promise<User[]> => {
-    const response = await api.get<User[]>('/auth/users');
+  getConversationPartners: async (): Promise<User[]> => {
+    const response = await api.get<User[]>('/messages/conversations');
+    return response.data;
+  },
+
+  getWebSocketToken: async (): Promise<{ token: string; user_id: string }> => {
+    const response = await api.get<{ token: string; user_id: string }>('/auth/ws-token');
+    return response.data;
+  },
+};
+
+export const pqAPI = {
+  /**
+   * Get the server's Kyber public key for PQ handshake
+   */
+  getKemPublicKey: async (): Promise<{ public_key: string }> => {
+    const response = await api.get<{ public_key: string }>('/pq/kem-public-key');
+    return response.data;
+  },
+
+  /**
+   * Perform PQ handshake by sending KEM ciphertext to server
+   */
+  handshake: async (ciphertext: string): Promise<{ status: string; message: string }> => {
+    const response = await api.post<{ status: string; message: string }>('/pq/handshake', {
+      ciphertext
+    });
     return response.data;
   },
 };
 
 export const messagesAPI = {
+  /**
+   * Send a plaintext message (backward compatibility)
+   */
   sendMessage: async (content: string, recipientId: string): Promise<Message> => {
     const response = await api.post<Message>('/messages', { content, recipient_id: recipientId });
+    return response.data;
+  },
+
+  /**
+   * Send an encrypted message (new PQ transport security format)
+   */
+  sendMessageEncrypted: async (
+    recipientId: string,
+    nonce: string,
+    ciphertext: string
+  ): Promise<Message> => {
+    const response = await api.post<Message>('/messages', {
+      recipient_id: recipientId,
+      nonce,
+      ciphertext
+    });
     return response.data;
   },
 
@@ -56,6 +100,14 @@ export const messagesAPI = {
   handleMessageRequest: async (requestId: string, action: 'accept' | 'decline'): Promise<void> => {
     await api.post(`/messages/requests/${requestId}/action`, { request_id: requestId, action });
   },
+};
+
+// WebSocket connection helper
+export const createWebSocket = (userId: string, token: string): WebSocket => {
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsHost = import.meta.env.VITE_API_URL?.replace(/^https?:\/\//, '') || 'localhost:8000';
+  const wsUrl = `${wsProtocol}//${wsHost}/ws/${userId}?token=${token}`;
+  return new WebSocket(wsUrl);
 };
 
 export default api;

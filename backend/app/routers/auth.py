@@ -38,21 +38,6 @@ async def register(request: Request, user_data: UserCreate):
     # Hash password
     password_hash = get_password_hash(user_data.password)
     
-    # STEP 4: Generate Post-Quantum Key Pair for New User
-    # ---------------------------------------------------
-    # Generate post-quantum key pair for secure message exchange
-    from app.post_quantum import PostQuantumKEM, encrypt_private_key
-    import base64
-    
-    public_key, private_key = PostQuantumKEM.generate_keypair()
-    
-    # Encrypt private key with user's password for secure storage
-    encrypted_private_key = encrypt_private_key(private_key, user_data.password)
-    
-    # Encode keys as base64 for database storage
-    public_key_b64 = base64.b64encode(public_key).decode('utf-8')
-    encrypted_private_key_b64 = base64.b64encode(encrypted_private_key).decode('utf-8')
-    
     # Create user document
     from datetime import datetime
     full_phone_number = f"{user_data.area_code}{user_data.phone_number}"
@@ -62,9 +47,6 @@ async def register(request: Request, user_data: UserCreate):
         "area_code": user_data.area_code,
         "phone_number": user_data.phone_number,
         "full_phone_number": full_phone_number,  # Combined for easy lookup
-        "pq_public_key": public_key_b64,  # Post-quantum public key (shareable)
-        "pq_private_key_encrypted": encrypted_private_key_b64,  # Encrypted private key
-        "pq_keys_generated_at": datetime.utcnow(),  # Track when keys were generated
         "created_at": datetime.utcnow()
     }
     
@@ -97,26 +79,6 @@ async def login(request: Request, response: Response, user_data: UserLogin):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password"
         )
-    
-    # STEP 7.5: Decrypt and Cache Private Key After Login
-    # ---------------------------------------------------
-    # Decrypt user's post-quantum private key and cache it for message decryption
-    # This allows decryption without asking for password every time
-    from app.key_manager import decrypt_and_cache_private_key
-    
-    try:
-        if "pq_private_key_encrypted" in user:
-            decrypt_and_cache_private_key(user, user_data.password)
-            print(f"Successfully cached private key for user {user['username']}")
-        else:
-            print(f"Warning: User {user['username']} does not have post-quantum keys")
-    except Exception as e:
-        # Log error but don't fail login - user can still use the app
-        # but won't be able to decrypt old messages until they re-authenticate
-        import traceback
-        print(f"ERROR: Failed to cache private key for user {user['username']}: {e}")
-        print(f"Traceback: {traceback.format_exc()}")
-        # Don't raise - allow login to proceed, but user won't be able to decrypt messages
     
     # Create access token
     access_token_expires = timedelta(minutes=settings.jwt_access_token_expire_minutes)
@@ -154,14 +116,25 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user)):
 
 @router.post("/logout")
 async def logout(response: Response, current_user: dict = Depends(get_current_user)):
-    """Logout and clear access token cookie and cached keys"""
-    # Clear cached private key
-    from app.key_manager import clear_user_keys
-    user_id = str(current_user["_id"])
-    clear_user_keys(user_id)
-    
+    """Logout and clear access token cookie"""
     response.delete_cookie(key="access_token", httponly=True, samesite="lax")
     return {"message": "Logged out successfully"}
+
+
+@router.get("/ws-token")
+async def get_websocket_token(
+    current_user: dict = Depends(get_current_user)
+):
+    """Get a token for WebSocket authentication"""
+    from datetime import timedelta
+    
+    # Create a short-lived token for WebSocket (1 hour)
+    token = create_access_token(
+        data={"sub": current_user["username"]},
+        expires_delta=timedelta(hours=1)
+    )
+    
+    return {"token": token, "user_id": str(current_user["_id"])}
 
 
 @router.get("/users", response_model=List[UserResponse])
@@ -191,51 +164,3 @@ async def get_all_users(
     ]
 
 
-@router.get("/users/{user_id}/public-key")
-async def get_user_public_key(
-    user_id: str,
-    current_user: dict = Depends(get_current_user)
-):
-    """
-    STEP 7.6: Get User Public Key Endpoint
-    ---------------------------------------
-    Retrieves a user's post-quantum public key for message encryption.
-    Public keys are safe to share and are needed to encrypt messages.
-    
-    Args:
-        user_id: ID of the user whose public key to retrieve
-    
-    Returns:
-        JSON with public_key (base64 encoded)
-    """
-    # Validate user_id
-    if not ObjectId.is_valid(user_id):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid user ID"
-        )
-    
-    user_id_obj = ObjectId(user_id)
-    
-    # Find user
-    user = await db_module.database.users.find_one({"_id": user_id_obj})
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    
-    # Check if user has post-quantum keys
-    if "pq_public_key" not in user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User does not have post-quantum keys"
-        )
-    
-    return {
-        "user_id": str(user["_id"]),
-        "username": user["username"],
-        "public_key": user["pq_public_key"],  # Already base64 encoded
-        "key_algorithm": "CRYSTALS-Kyber-768",
-        "key_generated_at": user.get("pq_keys_generated_at")
-    }

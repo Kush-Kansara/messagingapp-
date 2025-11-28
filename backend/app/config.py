@@ -13,8 +13,8 @@ class Settings(BaseSettings):
     jwt_algorithm: str = Field(default="HS256", env="JWT_ALGORITHM")
     jwt_access_token_expire_minutes: int = Field(default=30, env="JWT_ACCESS_TOKEN_EXPIRE_MINUTES")
     
-    # Encryption
-    app_encryption_key: str = Field(..., env="APP_ENCRYPTION_KEY")
+    # Encryption (optional - not used anymore, kept for backward compatibility)
+    app_encryption_key: str = Field(default="not-used-anymore", env="APP_ENCRYPTION_KEY")
     
     # Server
     host: str = Field(default="0.0.0.0", env="HOST")

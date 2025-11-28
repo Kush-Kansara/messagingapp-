@@ -117,8 +117,37 @@ class UserSearchRequest(BaseModel):
 
 # Message Models
 class MessageCreate(BaseModel):
-    content: str = Field(..., min_length=1, max_length=10000)  # Max 10KB message
+    # Support both encrypted and plaintext for backward compatibility
+    content: Optional[str] = None  # Plaintext (for backward compatibility)
     recipient_id: str  # ID of the user to send the message to
+    # Encrypted payload (new format)
+    nonce: Optional[str] = None  # Base64-encoded nonce for AES-GCM
+    ciphertext: Optional[str] = None  # Base64-encoded encrypted content
+    
+    def is_encrypted(self) -> bool:
+        """Check if this message is encrypted (has nonce and ciphertext)"""
+        return self.nonce is not None and self.ciphertext is not None
+    
+    @field_validator('*')
+    @classmethod
+    def validate_message_format(cls, v, info):
+        """Validate that either plaintext content OR encrypted payload is provided"""
+        if info.field_name == 'recipient_id':
+            return v  # Skip validation for recipient_id
+        
+        # Get all field values (this is called per field, so we need to check in the model)
+        return v
+    
+    def model_post_init(self, __context):
+        """Validate that either content or (nonce and ciphertext) are provided"""
+        is_enc = self.is_encrypted()
+        has_content = self.content is not None and self.content.strip() != ""
+        
+        if not is_enc and not has_content:
+            raise ValueError("Either 'content' (plaintext) or both 'nonce' and 'ciphertext' (encrypted) must be provided")
+        
+        if is_enc and has_content:
+            raise ValueError("Cannot provide both plaintext 'content' and encrypted 'nonce'/'ciphertext'")
 
 
 class Message(BaseModel):

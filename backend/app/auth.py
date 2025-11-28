@@ -81,3 +81,30 @@ async def get_current_user(request: Request, token: Optional[str] = Depends(oaut
     
     return user
 
+
+async def get_current_user_websocket(token: str):
+    """Get current user from JWT token for WebSocket authentication"""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+    )
+    
+    if not token:
+        raise credentials_exception
+    
+    try:
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+        token_data = TokenData(username=username)
+    except JWTError:
+        raise credentials_exception
+    
+    # Get user from database
+    user = await db_module.database.users.find_one({"username": token_data.username})
+    if user is None:
+        raise credentials_exception
+    
+    return user
+
