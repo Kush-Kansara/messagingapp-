@@ -164,3 +164,67 @@ async def get_all_users(
     ]
 
 
+@router.delete("/users/{user_id}", status_code=status.HTTP_200_OK)
+async def delete_user(
+    user_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Delete a user from the database.
+    Also deletes all messages and message requests associated with that user.
+    """
+    if db_module.database is None:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+    
+    # Validate user_id format
+    if not ObjectId.is_valid(user_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid user ID format"
+        )
+    
+    user_id_obj = ObjectId(user_id)
+    
+    # Prevent users from deleting themselves
+    if user_id_obj == current_user["_id"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot delete your own account"
+        )
+    
+    # Check if user exists
+    user = await db_module.database.users.find_one({"_id": user_id_obj})
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Delete all messages where this user is sender or recipient
+    await db_module.database.messages.delete_many({
+        "$or": [
+            {"sender_id": user_id_obj},
+            {"recipient_id": user_id_obj}
+        ]
+    })
+    
+    # Delete all message requests where this user is sender or recipient
+    await db_module.database.message_requests.delete_many({
+        "$or": [
+            {"sender_id": user_id_obj},
+            {"recipient_id": user_id_obj}
+        ]
+    })
+    
+    # Delete the user
+    result = await db_module.database.users.delete_one({"_id": user_id_obj})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    return {"message": f"User {user['username']} deleted successfully"}
+
+

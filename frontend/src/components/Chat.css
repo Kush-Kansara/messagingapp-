@@ -48,6 +48,7 @@
   cursor: pointer;
   border-bottom: 1px solid #2d3142;
   transition: all 0.2s ease;
+  position: relative;
 }
 
 .user-item:hover {
@@ -79,6 +80,42 @@
   font-weight: 500;
   color: #e4e6eb;
   font-size: 15px;
+  flex: 1;
+}
+
+.delete-user-button {
+  background: rgba(255, 107, 107, 0.2);
+  color: #ff6b6b;
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: bold;
+  line-height: 1;
+  padding: 0;
+  margin-left: auto;
+  transition: all 0.2s ease;
+  opacity: 0;
+  flex-shrink: 0;
+}
+
+.user-item:hover .delete-user-button {
+  opacity: 1;
+}
+
+.delete-user-button:hover {
+  background: rgba(255, 107, 107, 0.3);
+  border-color: rgba(255, 107, 107, 0.5);
+  transform: scale(1.1);
+}
+
+.delete-user-button:active {
+  transform: scale(0.95);
 }
 
 .empty-users {

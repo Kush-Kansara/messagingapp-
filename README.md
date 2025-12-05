@@ -8,8 +8,8 @@ A full-stack messaging application with post-quantum transport security, featuri
 - **JWT-based Auth**: Secure token-based authentication stored in httpOnly cookies
 - **Post-Quantum Transport Security**: 
   - Application layer: CRYSTALS-Kyber KEM with AES-256-GCM encryption
-  - Transport layer: OQS-OpenSSL 3 provider support (optional, see [OQS_OPENSSL_SETUP.md](OQS_OPENSSL_SETUP.md))
-  - See [POST_QUANTUM.md](POST_QUANTUM.md) for details
+  - Transport layer: OQS-OpenSSL 3 provider support (optional, see [DOCUMENTATION.md](DOCUMENTATION.md))
+  - See [DOCUMENTATION.md](DOCUMENTATION.md) for details
 - **One-to-One Messaging**: Private conversations between users
 - **Real-time Updates**: WebSocket-based instant message delivery
 - **Message Requests**: First messages require acceptance before conversation starts
@@ -23,7 +23,7 @@ A full-stack messaging application with post-quantum transport security, featuri
 - **JWT** - Token-based authentication (HS256)
 - **Bcrypt** - Password hashing
 - **liboqs-python** - Post-quantum cryptography (CRYSTALS-Kyber) for application-layer security
-- **OQS-OpenSSL 3 Provider** - Post-quantum TLS/HTTPS support (optional, see [OQS_OPENSSL_SETUP.md](OQS_OPENSSL_SETUP.md))
+- **OQS-OpenSSL 3 Provider** - Post-quantum TLS/HTTPS support (optional, see [DOCUMENTATION.md](DOCUMENTATION.md))
 - **WebSockets** - Real-time message delivery
 
 ### Frontend
@@ -146,7 +146,7 @@ docker run -d -p 27017:27017 --name mongodb mongo:7
    ✅ Backend is now running at: **http://localhost:8000**  
    📚 API docs available at: **http://localhost:8000/docs**
    
-   **Note**: If you see warnings about liboqs, the app will still work with fallback mode. For full post-quantum security, see [POST_QUANTUM.md](POST_QUANTUM.md).
+   **Note**: If you see warnings about liboqs, the app will still work with fallback mode. For full post-quantum security, see [DOCUMENTATION.md](DOCUMENTATION.md#post-quantum-security-implementation).
 
 ### Step 4: Frontend Setup
 
@@ -201,6 +201,7 @@ docker run -d -p 27017:27017 --name mongodb mongo:7
    - The recipient will see it as a message request
    - After accepting the request, you can chat normally!
 
+
 ## Project Structure
 
 ```
@@ -220,6 +221,7 @@ docker run -d -p 27017:27017 --name mongodb mongo:7
 │   │       ├── websocket.py     # WebSocket handler
 │   │       └── pq.py            # Post-quantum endpoints
 │   ├── requirements.txt
+│   ├── setup_demo.py            # Demo user setup script
 │   └── .env                     # Environment variables
 ├── frontend/
 │   ├── src/
@@ -233,11 +235,8 @@ docker run -d -p 27017:27017 --name mongodb mongo:7
 │   ├── package.json
 │   └── nginx.conf
 ├── README.md                    # This file
-├── POST_QUANTUM.md             # Post-quantum implementation details
-├── OQS_OPENSSL_SETUP.md        # OQS-OpenSSL 3 provider setup guide
-├── OQS_INTEGRATION_SUMMARY.md  # OQS-OpenSSL integration overview
-├── SETUP_CHECKLIST.md          # Step-by-step setup checklist
-└── TROUBLESHOOTING_BLANK_PAGE.md # Troubleshooting guide
+├── DOCUMENTATION.md            # Complete technical documentation
+└── start_demo.ps1              # Quick demo start script
 ```
 
 ## Environment Variables
@@ -313,7 +312,7 @@ docker run -d -p 27017:27017 --name mongodb mongo:7
 
 - `GET /messages/conversations` - Get list of users you've chatted with
 
-### Post-Quantum (see [POST_QUANTUM.md](POST_QUANTUM.md) and [OQS_OPENSSL_SETUP.md](OQS_OPENSSL_SETUP.md))
+### Post-Quantum (see [DOCUMENTATION.md](DOCUMENTATION.md))
 
 - `GET /pq/kem-public-key` - Get server's Kyber public key
 - `POST /pq/handshake` - Perform post-quantum handshake
@@ -328,29 +327,7 @@ docker run -d -p 27017:27017 --name mongodb mongo:7
   - Sends `new_message` events when messages arrive
   - Sends `new_request` events when message requests arrive
 
-## How Messages Work
 
-### Message Flow
-
-```
-User A → POST /messages → Server stores in MongoDB → 
-Server sends via WebSocket to User B → User B receives instantly
-```
-
-All communication goes through the server. Users never communicate directly.
-
-### Message Request System
-
-1. **First Message**: When User A sends the first message to User B, it creates a **message request** (pending state)
-2. **Request Notification**: User B sees the request in their sidebar under "Message Requests"
-3. **Accept/Decline**: User B can accept or decline the request
-4. **After Acceptance**: Future messages go directly to the conversation (no requests needed)
-
-### Database Collections
-
-- `users`: User accounts (username, password_hash, phone_number, etc.)
-- `messages`: Accepted messages between users
-- `message_requests`: Pending message requests
 
 ## Security Features
 
@@ -359,70 +336,11 @@ All communication goes through the server. Users never communicate directly.
 3. **Post-Quantum Transport Security**: 
    - **Application Layer**: CRYSTALS-Kyber KEM with AES-256-GCM encryption (always active)
    - **Transport Layer**: OQS-OpenSSL 3 provider for post-quantum TLS/HTTPS (optional)
-   - See [POST_QUANTUM.md](POST_QUANTUM.md) and [OQS_OPENSSL_SETUP.md](OQS_OPENSSL_SETUP.md) for details
+   - See [DOCUMENTATION.md](DOCUMENTATION.md) for details
 4. **Protected Channel**: All client-server communication uses post-quantum secure channels
 5. **CORS Protection**: Configured CORS middleware for frontend
 6. **Rate Limiting**: Applied to login/register endpoints
 
-## Troubleshooting
-
-### Backend Issues
-
-**"Connection refused" or MongoDB errors:**
-- Make sure MongoDB is running
-- Check your `MONGO_URL` in `.env` is correct
-- For Atlas, make sure your IP is whitelisted
-- Verify MongoDB service: `Get-Service MongoDB` (Windows)
-
-**"JWT_SECRET must be at least 32 characters":**
-- Update your `.env` file with a longer `JWT_SECRET` (at least 32 characters)
-
-**"liboqs not found" warnings:**
-- The app will work with fallback mode (see [POST_QUANTUM.md](POST_QUANTUM.md))
-- For full post-quantum security, install liboqs (optional)
-- The startup script (`start_server.ps1`) handles this gracefully and won't fail if liboqs is missing
-
-**Port 8000 already in use:**
-- Change the port: `uvicorn app.main:app --reload --port 8001`
-- Update frontend `.env` if you have one: `VITE_API_URL=http://localhost:8001`
-
-### Frontend Issues
-
-**"Cannot connect to backend":**
-- Make sure backend is running on port 8000
-- Check browser console for CORS errors
-- Verify `VITE_API_URL` in frontend `.env` (if you created one)
-
-**"npm install" fails:**
-- Make sure Node.js 18+ is installed: `node --version`
-- Try deleting `node_modules` and `package-lock.json`, then run `npm install` again
-
-**No users showing in sidebar:**
-- Register at least two users
-- Users should appear in "All Users" section automatically
-
-**Blank page after refresh:**
-- Check browser console (F12) for JavaScript errors
-- Verify both frontend and backend are running
-- See [TROUBLESHOOTING_BLANK_PAGE.md](TROUBLESHOOTING_BLANK_PAGE.md) for detailed help
-
-### MongoDB Issues
-
-**Check if MongoDB is running:**
-```powershell
-# Windows - Check service
-Get-Service MongoDB
-
-# Check if port is listening
-netstat -ano | findstr ":27017"
-```
-
-**Test MongoDB connection:**
-```powershell
-# If mongosh is installed
-mongosh
-# Type 'exit' to quit
-```
 
 ## Post-Quantum Security
 
@@ -435,13 +353,15 @@ This application implements post-quantum security at multiple levels:
 
 ### Transport Layer (Optional)
 - **OQS-OpenSSL 3 Provider**: Post-quantum TLS/HTTPS support
-- **Requires Setup**: See [OQS_OPENSSL_SETUP.md](OQS_OPENSSL_SETUP.md) for installation
+- **Requires Setup**: See [DOCUMENTATION.md](DOCUMENTATION.md#oqs-openssl-setup) for installation
 - **Benefits**: Post-quantum certificate signatures and TLS cipher suites
 
-For detailed information, see:
-- [POST_QUANTUM.md](POST_QUANTUM.md) - Application-layer post-quantum security
-- [OQS_OPENSSL_SETUP.md](OQS_OPENSSL_SETUP.md) - Transport-layer OQS-OpenSSL setup
-- [OQS_INTEGRATION_SUMMARY.md](OQS_INTEGRATION_SUMMARY.md) - Complete integration overview
+For detailed information, see [DOCUMENTATION.md](DOCUMENTATION.md) which includes:
+- Post-quantum security implementation details
+- OQS-OpenSSL setup guide
+- Demo guide and checklist
+- Testing guide
+- Complete troubleshooting section
 
 ## Development Notes
 

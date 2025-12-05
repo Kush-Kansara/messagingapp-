@@ -449,6 +449,44 @@ const Chat: React.FC = () => {
     }
   };
 
+  const handleDeleteUser = async (userId: string, username: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent triggering the user selection
+    
+    if (!window.confirm(`Are you sure you want to delete user "${username}"? This will permanently delete their account and all associated messages.`)) {
+      return;
+    }
+    
+    try {
+      await authAPI.deleteUser(userId);
+      
+      // If the deleted user was selected, clear selection
+      if (selectedUserId === userId) {
+        setSelectedUserId(null);
+        setMessages([]);
+      }
+      
+      // Refresh user lists
+      await fetchConversationPartners();
+      await fetchAllUsers();
+      
+      // Clear any error
+      setError('');
+    } catch (err: any) {
+      const errorDetail = err.response?.data?.detail;
+      let errorMessage = 'Failed to delete user';
+      
+      if (errorDetail) {
+        if (Array.isArray(errorDetail)) {
+          errorMessage = errorDetail.map((e: any) => e.msg || e.message || JSON.stringify(e)).join(', ');
+        } else if (typeof errorDetail === 'string') {
+          errorMessage = errorDetail;
+        }
+      }
+      
+      setError(errorMessage);
+    }
+  };
+
   if (!isAuthenticated) {
     return null;
   }
@@ -600,6 +638,13 @@ const Chat: React.FC = () => {
                 >
                   <div className="user-avatar">{otherUser.username[0].toUpperCase()}</div>
                   <div className="user-name">{otherUser.username}</div>
+                  <button
+                    className="delete-user-button"
+                    onClick={(e) => handleDeleteUser(otherUser.id, otherUser.username, e)}
+                    title={`Delete ${otherUser.username}`}
+                  >
+                    ×
+                  </button>
                 </div>
               ))}
               
@@ -633,6 +678,13 @@ const Chat: React.FC = () => {
                       >
                         <div className="user-avatar">{otherUser.username[0].toUpperCase()}</div>
                         <div className="user-name">{otherUser.username}</div>
+                        <button
+                          className="delete-user-button"
+                          onClick={(e) => handleDeleteUser(otherUser.id, otherUser.username, e)}
+                          title={`Delete ${otherUser.username}`}
+                        >
+                          ×
+                        </button>
                       </div>
                     ))}
                 </>
